@@ -1,5 +1,5 @@
 # Kiri project adoption contract.
-# Read with: python3 scripts/kiri_apply.py --project . --mode auto
+# Read with: python3 <skill_dir>/scripts/kiri_apply.py --project . --mode auto
 version: 1
 name: kiri-project-adoption
 description: Declarative contract for adopting Kiri in any project at any stage.
@@ -22,16 +22,16 @@ profiles:
       - port
     steps:
       - name: Resolve live facts
-        command: python3 scripts/kiri_brief.py
+        command: python3 <skill_dir>/scripts/kiri_brief.py
         gate: stage is not install_required or engine_stopped
       - name: Write project contract
-        command: python3 scripts/kiri_apply.py --mode greenfield --project . --write --image IMAGE --port PORT
+        command: python3 <skill_dir>/scripts/kiri_apply.py --mode greenfield --project . --write --image IMAGE --port PORT
         gate: kiri.project.yaml exists
       - name: Bring up the stack
         command: docker --context kiri compose -p PROJECT -f docker-compose.kiri.yaml up -d
         gate: compose ps shows expected services
       - name: Verify with the brief
-        command: python3 scripts/kiri_brief.py
+        command: python3 <skill_dir>/scripts/kiri_brief.py
         gate: stage is ready_idle or workload_running
   adopt:
     intent: Add Kiri to an existing project without rewriting its files.
@@ -43,16 +43,16 @@ profiles:
     required_values: []
     steps:
       - name: Resolve live facts
-        command: python3 scripts/kiri_brief.py
+        command: python3 <skill_dir>/scripts/kiri_brief.py
         gate: stage is not install_required or engine_stopped
       - name: Write project contract
-        command: python3 scripts/kiri_apply.py --mode adopt --project . --write
+        command: python3 <skill_dir>/scripts/kiri_apply.py --mode adopt --project . --write
         gate: kiri.project.yaml exists
       - name: Run existing workloads on Kiri
         command: docker --context kiri compose -p PROJECT -f EXISTING_COMPOSE up -d
         gate: existing services healthy
       - name: Verify with the brief
-        command: python3 scripts/kiri_brief.py
+        command: python3 <skill_dir>/scripts/kiri_brief.py
         gate: stage is workload_running or ready_idle
   migrate:
     intent: Rewrite an existing container workflow so Kiri becomes the default engine.
@@ -65,13 +65,13 @@ profiles:
       - migration_target
     steps:
       - name: Resolve live facts
-        command: python3 scripts/kiri_brief.py
+        command: python3 <skill_dir>/scripts/kiri_brief.py
         gate: stage is not install_required or engine_stopped
       - name: Inventory current engine and workloads
         command: kiri import --list or docker save/load through both contexts
         gate: images and volumes accounted for
       - name: Write project contract
-        command: python3 scripts/kiri_apply.py --mode migrate --project . --write
+        command: python3 <skill_dir>/scripts/kiri_apply.py --mode migrate --project . --write
         gate: kiri.project.yaml exists
       - name: Bring up on Kiri
         command: docker --context kiri compose -p PROJECT -f EXISTING_COMPOSE up -d
@@ -91,8 +91,8 @@ safety:
     - credentials
     - migration target engine
 verification:
-  - python3 scripts/kiri_brief.py
-  - bash scripts/kiri-doctor.sh
+  - python3 <skill_dir>/scripts/kiri_brief.py
+  - bash <skill_dir>/scripts/kiri-doctor.sh
   - docker --context kiri info --format "{{.ServerVersion}} {{.OperatingSystem}}"
   - docker --context kiri compose -p PROJECT -f docker-compose.kiri.yaml up -d
   - docker --context kiri compose -p PROJECT -f docker-compose.kiri.yaml down
