@@ -1,0 +1,58 @@
+name: source-watch
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve upstream facts
+        id: facts
+        run: |
+          python3 scripts/kiri_facts.py > facts.json
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          d = json.load(open("facts.json"))
+          print("mode=" + d["mode"])
+          print("version=" + str(d["upstream"]["version"]))
+          print("update=" + str(d["comparison"]["update_available"]).lower())
+          failed = [k for k, v in d["sources"].items() if v["status"] != "ok"]
+          print("failed=" + ",".join(failed))
+          PY
+
+      - name: Report drift
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ steps.facts.outputs.mode }}
+          VERSION: ${{ steps.facts.outputs.version }}
+          UPDATE: ${{ steps.facts.outputs.update }}
+          FAILED: ${{ steps.facts.outputs.failed }}
+        run: |
+          if [ "$MODE" = live ] && [ "$UPDATE" = false ]; then
+            gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+              --search 'in:title "Kiri source drift"' --limit 20 --json number,title \
+              | python3 -c 'import json,sys,subprocess,os; rows=json.load(sys.stdin); [subprocess.run(["gh","issue","close","--repo",os.environ["GITHUB_REPOSITORY"],str(r["number"]),"--reason","completed"],check=True) for r in rows if r["title"]=="Kiri source drift"]'
+            exit 0
+          fi
+          BODY="Mode: $MODE. Upstream version: $VERSION. Update available: $UPDATE. Failed sources: ${FAILED:-none}. See the resolver output in the workflow log."
+          EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title "Kiri source drift"' --limit 1 --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "$GITHUB_REPOSITORY" --body "$BODY"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Kiri source drift" --body "$BODY" --label "maintenance"
+          fi

@@ -1,0 +1,7 @@
+name: kiri-smoke
+services:
+  smoke:
+    image: alpine:latest
+    container_name: kiri-smoke
+    command: sh -c 'echo KIRI_COMPOSE_OK; sleep 3600'
+    restart: "no"

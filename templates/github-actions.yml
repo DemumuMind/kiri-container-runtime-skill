@@ -1,0 +1,45 @@
+# Kiri smoke job. Resolve the installer URL from the brief's discovery on first use.
+# Adapt the platform runner; verify current flags in the live docs.
+name: kiri-smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Kiri
+        run: curl -fsSL https://runkiri.com/install.sh | bash
+
+      - name: Resolve brief
+        id: brief
+        run: python3 scripts/kiri_brief.py > brief.json
+
+      - name: Fail on blocker stages
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          report = json.load(open("brief.json"))
+          blockers = {"install_required", "engine_stopped", "engine_unreachable", "incident"}
+          if report["stage"] in blockers:
+              print("blocking stage:", report["stage"], file=sys.stderr)
+              print("\n".join(report["next_actions"]), file=sys.stderr)
+              sys.exit(1)
+          print("stage:", report["stage"])
+          PY
+
+      - name: Smoke workload
+        run: |
+          docker --context kiri run --rm alpine echo KIRI_OK
+          docker --context kiri compose -p ci-${GITHUB_RUN_ID} -f templates/compose-smoke.yaml up -d
+          docker --context kiri compose -p ci-${GITHUB_RUN_ID} -f templates/compose-smoke.yaml logs
+
+      - name: Teardown
+        if: always()
+        run: |
+          docker --context kiri compose -p ci-${GITHUB_RUN_ID} -f templates/compose-smoke.yaml down --remove-orphans || true
